@@ -13,10 +13,6 @@
 
 */
 
-#define SW 2
-#define DT 15
-#define CLK 16
-
 #define MENU 0
 #define CONFIRM 1
 #define SERVING 2
@@ -25,6 +21,10 @@
 #include <LiquidCrystal_I2C.h>
 
 LiquidCrystal_I2C lcd(0x27,20,4);
+
+const int SW 2;
+const int DT 15;
+const int CLK 16;
 
 const int dirPin1 = 3;
 const int dirPin2 = 5;
@@ -47,8 +47,8 @@ bool hasChangedState = false;
 bool confirm = true; 
 unsigned long lastButtonPress = 0;
 int state = MENU;
-String drinks [5] = {"Cuba libre", "Mojito", "Gin tonic", "Screwdriver", "Moscow mule"};
 int nDrinks = 5;
+String drinks [nDrinks] = {"Cuba libre", "Mojito", "Gin tonic", "Screwdriver", "Moscow mule"};
 
 void buttonISR() {
 	buttonPressed = true;
@@ -89,7 +89,7 @@ void lcdPrintCentered(String s, int position) {
 }
 
 void menuRoutine() {
-	counter = (digitalRead(DT) != currentStateCLK) ? (counter - 1 + nDrinks) % nDrinks : counter = (counter + 1) % nDrinks;
+	counter = (digitalRead(DT) != currentStateCLK) ? (counter - 1 + nDrinks) % nDrinks : counter = (counter + 1) % nDrinks; //se DT e currentStateCLK sono diversi allora abbiamo girato in senso antiorario, altrimenti in senso orario 
 	lcd.clear();
 	lcd.print("Seleziona drink!");
 	lcdPrintCentered(drinks[counter], 1);
@@ -133,8 +133,6 @@ void serve() {
 		nSteps(stepPin1, dirPin1, HIGH, 10);
 		nSteps(stepPin4, dirPin4, HIGH, 10);
 	}
-	
-	
 }
 
 void serveRoutine() {
