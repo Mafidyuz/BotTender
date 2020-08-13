@@ -22,9 +22,9 @@
 
 LiquidCrystal_I2C lcd(0x27,20,4);
 
-const int SW 2;
-const int DT 15;
-const int CLK 16;
+const int SW = 2;
+const int DT = 15;
+const int CLK = 16;
 
 const int dirPin1 = 3;
 const int dirPin2 = 5;
