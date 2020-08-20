@@ -1,4 +1,7 @@
 /*
+	BOTTIGLIE: vodka, rum, succo d'arancia, coca-cola, sciroppo alla fragola
+	DRINK: cuba libre, screwdriver, malibu, rum e arancia, caipiroska alla fragola
+
 	“Chi beve solo acqua ha un segreto da nascondere.” - Charles Pierre Baudelaire
 	“Ecco il problema di chi beve, pensai versandomene un altro: se succede qualcosa di brutto si beve per dimenticare; se succede qualcosa di bello si beve per festeggiare; se non succede niente si beve per far succedere qualcosa.” - Charles Bukowski
 	“Io non mi fido di nessun bastardo che non beva. La gente che non beve ha paura di rivelare se stessa.” - Humphrey Bogart
@@ -15,7 +18,8 @@
 
 #define MENU 0
 #define CONFIRM 1
-#define SERVING 2
+#define QUANTITA 2
+#define SERVING 3
 
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
@@ -26,29 +30,32 @@ const int SW = 2;
 const int DT = 15;
 const int CLK = 16;
 
-const int dirPin1 = 3;
-const int dirPin2 = 5;
-const int dirPin3 = 7;
-const int dirPin4 = 9;
-const int dirPin5 = 11;
+const int dirPin[4] = {5, 7, 9, 11}; 
+const int stepPin[4] = {6, 8, 10, 12};
 
-const int stepPin1 = 4;
-const int stepPin2 = 6;
-const int stepPin3 = 8;
-const int stepPin4 = 10;
-const int stepPin5 = 12;
+const int triggerPort = 13;
+const int echoPort = 14;
 
 int counter = 0;
 int currentStateCLK;
 int lastStateCLK;
+int quantita = 0;
 bool counterChanged = false;
 bool buttonPressed = false;
 bool hasChangedState = false;
 bool confirm = true; 
 unsigned long lastButtonPress = 0;
 int state = MENU;
-int nDrinks = 5;
-String drinks [nDrinks] = {"Cuba libre", "Mojito", "Gin tonic", "Screwdriver", "Moscow mule"};
+const int nDrinks = 3;
+const int nIngredients = 4;
+String drinks[nDrinks] = {"Cuba libre", "Rum e arancia", "Rum tonic"};
+
+//bottiglie: rum, succo d'arancia, coca-cola, acqua tonica
+float proporzioni [nDrinks][nIngredients] = {
+	{1./3, 0, 2./3, 0}, 	//Cuba libre
+	{1./4, 3./4, 0, 0},	//Rum e arancia
+	{1./4, 0, 0, 3./4},	//Rum tonic
+};
 
 void buttonISR() {
 	buttonPressed = true;
@@ -58,7 +65,7 @@ void buttonRoutine() {
 	if (buttonPressed && (millis() - lastButtonPress > 500)) {
 		Serial.print("Button pressed! ");
 		Serial.println(millis());
-		state = (state + 1) % 3;
+		state = (state + 1) % 4;
 		lastButtonPress = millis();
 		Serial.print("State: ");
 		Serial.println(state);
@@ -108,31 +115,83 @@ void confirmRoutine() {
 }
 
 void serve() {
-	if (drinks[counter] == "Mojito") {
-		nSteps(stepPin3, dirPin3, HIGH, 10);
-	}
-	else if (drinks[counter] == "Cuba libre") {
-		nSteps(stepPin4, dirPin4, HIGH, 5);
-		nSteps(stepPin2, dirPin2, HIGH, 5);
-	}
-	else if (drinks[counter] == "Gin tonic") {
-		nSteps(stepPin1, dirPin1, HIGH, 2);
-		nSteps(stepPin2, dirPin2, HIGH, 2);
-		nSteps(stepPin3, dirPin3, HIGH, 2);
-		nSteps(stepPin4, dirPin4, HIGH, 2);
-		nSteps(stepPin5, dirPin5, HIGH, 2);
-	}
-	else if (drinks[counter] == "Screwdriver") {
-		nSteps(stepPin1, dirPin1, HIGH, 5);
-		nSteps(stepPin2, dirPin2, HIGH, 5);
-		nSteps(stepPin3, dirPin3, HIGH, 5);
-		nSteps(stepPin4, dirPin4, HIGH, 5);
-		nSteps(stepPin5, dirPin5, HIGH, 5);
-	}
-	else if (drinks[counter] == "Moscow mule") {
-		nSteps(stepPin1, dirPin1, HIGH, 10);
-		nSteps(stepPin4, dirPin4, HIGH, 10);
-	}
+		int ingredient = 0;
+		float durata;
+		float distanza;
+		float distanzaIniziale;
+		float distanzaIngrediente;
+		float distanzaFinale;
+		unsigned long lastTimeIsDone = 0;
+		bool firstIteration = true;
+		bool firstIterationIngredient = true;
+
+		do{
+			//Prendi distanza
+			digitalWrite( triggerPort, LOW );
+			digitalWrite( triggerPort, HIGH );
+			delayMicroseconds( 10 );
+			digitalWrite( triggerPort, LOW );
+			durata = pulseIn( echoPort, HIGH );
+			distanza = round(3.4 * durata / 2) / 100.;
+			
+
+			if (firstIteration){
+				distanzaIniziale = distanza;
+				firstIteration = false;
+				distanzaFinale = distanzaIniziale - quantita;
+				Serial.print("DistanzaIniziale: ");
+				Serial.println(distanzaIniziale);
+			}
+
+			if(firstIterationIngredient){
+				while(proporzioni[counter][ingredient] == 0 && ingredient < nIngredients)
+					ingredient++; 
+
+				distanzaIngrediente = distanza - proporzioni[counter][ingredient] * quantita;
+				Serial.print("Distanza: ");
+				Serial.println(distanza);
+
+				Serial.print("DistanzaIngrediente: ");
+				Serial.println(distanzaIngrediente);
+				Serial.print("Ingrendiente: ");
+				Serial.println(ingredient);
+				Serial.println();
+				
+				firstIterationIngredient = false;
+			}
+
+			nSteps(stepPin[ingredient], dirPin[ingredient], HIGH, 1);
+
+			lcd.setCursor(0, 1);
+			lcd.print("dist.: ");
+
+			//dopo 38ms è fuori dalla portata del sensore
+			if( durata > 38000 ){
+				lcd.setCursor(0, 1); 
+				lcd.println("Fuori portata   ");
+			} 
+			else{ 
+				lcd.print(distanza); 
+				lcd.println(" cm     ");
+			}
+
+			if(distanza < distanzaIngrediente)  {
+				if(ingredient++ < nIngredients)
+					firstIterationIngredient = true;
+				lastTimeIsDone = millis();
+			}
+			
+		} while(millis() - lastTimeIsDone < 200 || ingredient < nIngredients);
+}
+
+void selectQuantitaRoutine() {
+	quantita = (digitalRead(DT) != currentStateCLK) ? (quantita - 1 + 15) % 15 : quantita = (quantita + 1) % 15;
+	lcd.clear();
+	lcdPrintCentered("Quanti cm vuoi?",0);
+
+	lcd.setCursor(0,1);
+	lcd.print("cm: ");
+	lcd.print(quantita);
 }
 
 void serveRoutine() {
@@ -159,6 +218,9 @@ void rotatoryEncoderRoutine() {
 			case CONFIRM:
 				confirmRoutine();
 				break;
+			case QUANTITA:
+				selectQuantitaRoutine();
+				break;
 			case SERVING:
 				serveRoutine();
 				break;
@@ -175,23 +237,20 @@ void setup() {
 	pinMode(DT,INPUT);
 	pinMode(SW, INPUT_PULLUP);
 
-	pinMode(stepPin1, OUTPUT);
-	pinMode(dirPin1, OUTPUT);
-	pinMode(stepPin2, OUTPUT);
-	pinMode(dirPin2, OUTPUT);
-	pinMode(stepPin3, OUTPUT);
-	pinMode(dirPin3, OUTPUT);
-	pinMode(stepPin4, OUTPUT);
-	pinMode(dirPin4, OUTPUT);
-	pinMode(stepPin5, OUTPUT);
-	pinMode(dirPin5, OUTPUT);
+	for(int i=0; i<4; i++) {
+		pinMode(stepPin[i], OUTPUT);
+		pinMode(dirPin[i], OUTPUT);
+	}
+
+	pinMode(triggerPort, OUTPUT);
+	pinMode(echoPort, INPUT);
 
 	Serial.begin(9600);
 
 	lcd.init();
 	lcd.backlight();
-	lcdPrintCentered("Ciao! sono il", 0);
-	lcdPrintCentered("bottender!", 1);
+	lcdPrintCentered("Ciao! Posiziona ", 0);
+	lcdPrintCentered("il bicchiere!", 1);
 
 	lastStateCLK = digitalRead(CLK);
 
@@ -200,6 +259,5 @@ void setup() {
 void loop() {
 	rotatoryEncoderRoutine();
 	buttonRoutine();
-
-	delay(1);
+	delayMicroseconds(500);
 }
