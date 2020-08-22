@@ -27,14 +27,14 @@
 LiquidCrystal_I2C lcd(0x27,20,4);
 
 const int SW = 2;
-const int DT = 15;
-const int CLK = 16;
+const int DT = 16;
+const int CLK = 17;
 
 const int dirPin[4] = {5, 7, 9, 11}; 
 const int stepPin[4] = {6, 8, 10, 12};
 
-const int triggerPort = 13;
-const int echoPort = 14;
+const int triggerPort = 14;
+const int echoPort = 15;
 
 int counter = 0;
 int currentStateCLK;
@@ -46,13 +46,14 @@ bool hasChangedState = false;
 bool confirm = true; 
 unsigned long lastButtonPress = 0;
 int state = MENU;
+
 const int nDrinks = 3;
 const int nIngredients = 4;
 String drinks[nDrinks] = {"Cuba libre", "Rum e arancia", "Rum tonic"};
 
 //bottiglie: rum, succo d'arancia, coca-cola, acqua tonica
 float proporzioni [nDrinks][nIngredients] = {
-	{1./3, 0, 2./3, 0}, 	//Cuba libre
+	{0, 1./3, 2./3, 0}, //Cuba libre
 	{1./4, 3./4, 0, 0},	//Rum e arancia
 	{1./4, 0, 0, 3./4},	//Rum tonic
 };
@@ -75,11 +76,11 @@ void buttonRoutine() {
 }
 
 void oneStep(int stepPin) {
-	  for(int i = 0; i < 200; i++) {
+	for(int i = 0; i < 200; i++) {
 		digitalWrite(stepPin,HIGH); 
-		delayMicroseconds(800); 
+		delayMicroseconds(600); 
 		digitalWrite(stepPin,LOW); 
-		delayMicroseconds(800); 
+		delayMicroseconds(600); 
 	}
 }
 
@@ -114,9 +115,13 @@ void confirmRoutine() {
 		lcd.print("  SI       [NO] ");
 }
 
+float microsecondsToCentimeters(long microseconds) {
+	return round(3.4 * microseconds / 2.) / 100.;
+}
+
 void serve() {
 		int ingredient = 0;
-		float durata;
+		long durata;
 		float distanza;
 		float distanzaIniziale;
 		float distanzaIngrediente;
@@ -124,15 +129,17 @@ void serve() {
 		unsigned long lastTimeIsDone = 0;
 		bool firstIteration = true;
 		bool firstIterationIngredient = true;
-
+		
 		do{
 			//Prendi distanza
 			digitalWrite( triggerPort, LOW );
+			delayMicroseconds(2);
 			digitalWrite( triggerPort, HIGH );
 			delayMicroseconds( 10 );
 			digitalWrite( triggerPort, LOW );
 			durata = pulseIn( echoPort, HIGH );
-			distanza = round(3.4 * durata / 2) / 100.;
+			distanza = microsecondsToCentimeters(durata);
+			Serial.println(durata);
 			
 
 			if (firstIteration){
@@ -160,7 +167,7 @@ void serve() {
 				firstIterationIngredient = false;
 			}
 
-			nSteps(stepPin[ingredient], dirPin[ingredient], HIGH, 1);
+			nSteps(stepPin[ingredient], dirPin[ingredient], LOW, 1);
 
 			lcd.setCursor(0, 1);
 			lcd.print("dist.: ");
@@ -185,24 +192,27 @@ void serve() {
 }
 
 void selectQuantitaRoutine() {
-	quantita = (digitalRead(DT) != currentStateCLK) ? (quantita - 1 + 15) % 15 : quantita = (quantita + 1) % 15;
-	lcd.clear();
-	lcdPrintCentered("Quanti cm vuoi?",0);
+	if(confirm){
+		quantita = (digitalRead(DT) != currentStateCLK) ? (quantita - 1 + 15) % 15 : quantita = (quantita + 1) % 15;
+		lcd.clear();
+		lcdPrintCentered("Quanti cm vuoi?",0);
 
-	lcd.setCursor(0,1);
-	lcd.print("cm: ");
-	lcd.print(quantita);
+		lcd.setCursor(0,1);
+		lcd.print("cm: ");
+		lcd.print(quantita);
+	} else {
+		state = MENU;	
+		hasChangedState = true;
+	}
 }
 
 void serveRoutine() {
-	if(confirm) {
-		lcd.clear();
-		lcdPrintCentered("Servendo",0);
-		lcdPrintCentered(drinks[counter] + "...",1);
-		Serial.print("Servendo ");
-		Serial.println(drinks[counter]);
-		serve();
-	}
+	lcd.clear();
+	lcdPrintCentered("Servendo",0);
+	lcdPrintCentered(drinks[counter] + "...",1);
+	Serial.print("Servendo ");
+	Serial.println(drinks[counter]);
+	serve();
 	state = MENU;	
 	hasChangedState = true;
 }
@@ -247,7 +257,7 @@ void setup() {
 
 	Serial.begin(9600);
 
-	lcd.init();
+		lcd.init();
 	lcd.backlight();
 	lcdPrintCentered("Ciao! Posiziona ", 0);
 	lcdPrintCentered("il bicchiere!", 1);
@@ -259,5 +269,5 @@ void setup() {
 void loop() {
 	rotatoryEncoderRoutine();
 	buttonRoutine();
-	delayMicroseconds(500);
+	delay(1);
 }
