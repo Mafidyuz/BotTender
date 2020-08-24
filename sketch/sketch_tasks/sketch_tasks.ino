@@ -1,22 +1,7 @@
 /*
 	BOTTIGLIE: vodka, rum, succo d'arancia, coca-cola, sciroppo alla fragola
 	DRINK: cuba libre, screwdriver, malibu, rum e arancia, caipiroska alla fragola
-
-	“Chi beve solo acqua ha un segreto da nascondere.” - Charles Pierre Baudelaire
-	“Ecco il problema di chi beve, pensai versandomene un altro: se succede qualcosa di brutto si beve per dimenticare; se succede qualcosa di bello si beve per festeggiare; se non succede niente si beve per far succedere qualcosa.” - Charles Bukowski
-	“Io non mi fido di nessun bastardo che non beva. La gente che non beve ha paura di rivelare se stessa.” - Humphrey Bogart
-	“Bevo per rendere le altre persone interessanti.” - George Jean Nathan
-	“Penso che penso troppo... ecco perché bevo.” - Janis Joplin
-	“Purtroppo è difficile dimenticare qualcuno bevendo un'orzata.” - Hugo Eugenio Pratt
-	"I feel sorry for people who don't drink. When they wake up in the morning that's as good as they're going to feel all day." ~ Frank Sinatra
-	"Always remember that I have taken more out of alcohol than alcohol has taken out of me." ~ Winston Churchill
-	"I drink to make other people more interesting." ~ Ernest Hemingway
-	"It takes only one drink to get me drunk.....the trouble is, I can't remember if it's the thirteenth or the fourteenth." ~ George Burns
-	"Here’s to alcohol, the cause of — and solution to — all life’s problems." ~ Homer Simpson
-
 */
-
-
 
 #define _TASK_MICRO_RES
 #define ONE_STEP_RES (600L)
@@ -32,6 +17,7 @@
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 #include <TaskScheduler.h>
+#include <Statistics.h>
 
 const int SW = 2;
 const int DT = 16;
@@ -94,7 +80,7 @@ bool stepStatus = true;
 
 bool oneStepIsRunning = false;
 
-Task oneStepTask(ONE_STEP_RES, ONE_STEP, oneStepCallBack);
+Task oneStepTask(ONE_STEP_RES, TASK_FOREVER, oneStepCallBack);
 
 void oneStepCallBack() {
 	digitalWrite(currentStepPin, stepStatus); 
@@ -104,15 +90,14 @@ void oneStepCallBack() {
 void nSteps(int stepPin, int dirPin, bool dir, int nGiri) {
 	currentStepPin = stepPin;
 	if(!oneStepTask.isEnabled()){
-		Serial.println("is enabled");
+		runner.deleteTask(oneStepTask);
+		//Serial.println("is enabled");
 		digitalWrite(dirPin, dir);
-		Serial.print("Step pin: ");
-		Serial.println(stepPin);
+		//Serial.print("Step pin: ");
+		//Serial.println(stepPin);
 		runner.addTask(oneStepTask);
 		oneStepTask.setIterations(ONE_STEP * nGiri);
-		oneStepTask.enable();	
-	} else {
-		runner.deleteTask(oneStepTask);
+		oneStepTask.enable();
 	}
 }
 
@@ -147,13 +132,36 @@ void writeLcdCallback() {
 	lcd.setCursor(0, 1);
 	lcd.print("peso.: ");
 	lcd.print(peso);
+	//Serial.println(peso);
 }
 
 Task writeLcdTask(TASK_SECOND, TASK_FOREVER, writeLcdCallback);
 
+void waitUntilWeightIsStable() {
+
+	lcd.clear();
+	Statistics stats(10);
+	float p;
+	do {
+		stats.reset();
+		for(int i=0; i<10; i++){
+			if(LoadCell.update()) 
+				p = LoadCell.getData();
+			else
+				i--;
+			stats.addData(p);
+			Serial.print("P: ");
+			Serial.println(p);
+			delay(50);
+		}
+	Serial.print("std: ");
+	Serial.println(stats.stdDeviation());
+	} while(stats.stdDeviation() > 0.5);
+}
 
 void serve() {
 		int ingredient = 0;
+		waitUntilWeightIsStable();
 		peso = LoadCell.getData();
 		float pesoIniziale;
 		float pesoIngrediente;
@@ -164,7 +172,7 @@ void serve() {
 		runner.addTask(writeLcdTask);
 		writeLcdTask.enable();
 		do{
-			//runner.execute();
+			runner.execute();
 
 			if (LoadCell.update())
 				peso = LoadCell.getData();
@@ -193,19 +201,19 @@ void serve() {
 
 				firstIterationIngredient = false;
 			}
-
-			//nSteps(stepPin[ingredient], dirPin[ingredient], LOW, 1);
+		
+			nSteps(stepPin[ingredient], dirPin[ingredient], LOW, 1);
 			
-			
-			
-			//Serial.println(peso);
 			if(peso > pesoIngrediente)  {
 				if(ingredient++ < nIngredients)
 					firstIterationIngredient = true;
 				lastTimeIsDone = millis();
 			}
 			
-		} while(millis() - lastTimeIsDone < 200 || ingredient < nIngredients);
+		} while(millis() - lastTimeIsDone < 200 || ingredient < nIngredients && ingredient >= 0);
+		oneStepTask.disable();
+		writeLcdTask.disable();
+		runner.deleteTask(oneStepTask);
 		runner.deleteTask(writeLcdTask);
 }
 
@@ -225,11 +233,11 @@ void selectQuantitaRoutine() {
 }
 
 void serveRoutine() {
-	lcd.clear();
+	/*lcd.clear();
 	lcdPrintCentered("Servendo",0);
 	lcdPrintCentered(drinks[counter] + "...",1);
 	Serial.print("Servendo ");
-	Serial.println(drinks[counter]);
+	Serial.println(drinks[counter]);*/
 	serve();
 	state = MENU;	
 	hasChangedState = true;
@@ -295,13 +303,6 @@ void setup() {
 	boolean _tare = true; 
 	LoadCell.start(stabilizingtime, _tare);
 	LoadCell.setCalFactor(calibrationValue);
-	if (LoadCell.getTareTimeoutFlag()) {
-		Serial.println("Timeout, check MCU>HX711 wiring and pin designations");
-	}
-	else {
-		LoadCell.setCalFactor(calibrationValue); // set calibration factor (float)
-		Serial.println("Startup is complete");
-	}
 }
 
 void loop() {
