@@ -1,6 +1,6 @@
 
-const int dirPin[4] = {5, 7, 9, 11}; 
-const int stepPin[4] = {6, 8, 10, 12};
+const int dirPin[4] = {7, 9, 11, 13}; 
+const int stepPin[4] = {8, 10, 12, 14};
 
 void oneStep(int stepPin) {
 	for(int i = 0; i < 200; i++) {
@@ -26,6 +26,6 @@ void setup() {
 }
 
 void loop() {
-    for(int i=0; i<5; i++)
+    for(int i=0; i<4; i++)
         nSteps(stepPin[i], dirPin[i], LOW, 5);
 }

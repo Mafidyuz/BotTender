@@ -26,13 +26,13 @@ const int CLK = 17;
 const int HX711_dout = 4; 
 const int HX711_sck = 3; 
 
-const int dirPin[4] = {5, 7, 9, 11}; 
-const int stepPin[4] = {6, 8, 10, 12};
+const int dirPin[4] = {7, 9, 11, 13}; 
+const int stepPin[4] = {8, 10, 12, 14};
 
 int counter = 0;
 int currentStateCLK;
 int lastStateCLK;
-int quantita = 250;
+int quantita = 20;
 bool counterChanged = false;
 bool buttonPressed = false;
 bool hasChangedState = false;
@@ -46,7 +46,7 @@ String drinks[nDrinks] = {"Cuba libre", "Rum e arancia", "Rum tonic"};
 
 //bottiglie: rum, succo d'arancia, coca-cola, acqua tonica
 float proporzioni [nDrinks][nIngredients] = {
-	{0, 1./3, 2./3, 0}, //Cuba libre
+	{1./3, 0, 2./3, 0}, //Cuba libre
 	{1./4, 3./4, 0, 0},	//Rum e arancia
 	{1./4, 0, 0, 3./4},	//Rum tonic
 };
@@ -138,8 +138,9 @@ void writeLcdCallback() {
 Task writeLcdTask(TASK_SECOND, TASK_FOREVER, writeLcdCallback);
 
 void waitUntilWeightIsStable() {
-
 	lcd.clear();
+	lcdPrintCentered("Stabilizzando", 0);
+	lcdPrintCentered("bilancia...", 1);
 	Statistics stats(10);
 	float p;
 	do {
@@ -152,7 +153,7 @@ void waitUntilWeightIsStable() {
 			stats.addData(p);
 			Serial.print("P: ");
 			Serial.println(p);
-			delay(50);
+			delay(100);
 		}
 	Serial.print("std: ");
 	Serial.println(stats.stdDeviation());
