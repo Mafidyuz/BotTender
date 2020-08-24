@@ -16,6 +16,8 @@
 
 */
 
+
+
 #define _TASK_MICRO_RES
 #define ONE_STEP_RES (600L)
 #define ONE_STEP 400
@@ -25,29 +27,26 @@
 #define QUANTITA 2
 #define SERVING 3
 
+#include <HX711_ADC.h>
+#include <EEPROM.h>
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 #include <TaskScheduler.h>
-
-Scheduler runner;
-
-
-LiquidCrystal_I2C lcd(0x27,20,4);
 
 const int SW = 2;
 const int DT = 16;
 const int CLK = 17;
 
+const int HX711_dout = 4; 
+const int HX711_sck = 3; 
+
 const int dirPin[4] = {5, 7, 9, 11}; 
 const int stepPin[4] = {6, 8, 10, 12};
-
-const int triggerPort = 14;
-const int echoPort = 15;
 
 int counter = 0;
 int currentStateCLK;
 int lastStateCLK;
-int quantita = 0;
+int quantita = 250;
 bool counterChanged = false;
 bool buttonPressed = false;
 bool hasChangedState = false;
@@ -65,6 +64,13 @@ float proporzioni [nDrinks][nIngredients] = {
 	{1./4, 3./4, 0, 0},	//Rum e arancia
 	{1./4, 0, 0, 3./4},	//Rum tonic
 };
+
+Scheduler runner;
+
+LiquidCrystal_I2C lcd(0x27,20,4);
+
+HX711_ADC LoadCell(HX711_dout, HX711_sck);
+const int calVal_eepromAdress = 0;
 
 void buttonISR() {
 	buttonPressed = true;
@@ -93,14 +99,6 @@ Task oneStepTask(ONE_STEP_RES, ONE_STEP, oneStepCallBack);
 void oneStepCallBack() {
 	digitalWrite(currentStepPin, stepStatus); 
 	stepStatus = !stepStatus;
-}
-
-bool blinkStatus = true;
-Task blinkTask(TASK_SECOND, ONE_STEP, blinkCallback);
-
-void blinkCallback() {
-	digitalWrite(LED_BUILTIN, blinkStatus); 
-	blinkStatus = !blinkStatus;
 }
 
 void nSteps(int stepPin, int dirPin, bool dir, int nGiri) {
@@ -143,91 +141,82 @@ void confirmRoutine() {
 		lcd.print("  SI       [NO] ");
 }
 
-float microsecondsToCentimeters(long microseconds) {
-	return round(3.4 * microseconds / 2.) / 100.;
+float peso;
+
+void writeLcdCallback() {
+	lcd.setCursor(0, 1);
+	lcd.print("peso.: ");
+	lcd.print(peso);
 }
+
+Task writeLcdTask(TASK_SECOND, TASK_FOREVER, writeLcdCallback);
+
 
 void serve() {
 		int ingredient = 0;
-		long durata;
-		float distanza;
-		float distanzaIniziale;
-		float distanzaIngrediente;
-		float distanzaFinale;
+		peso = LoadCell.getData();
+		float pesoIniziale;
+		float pesoIngrediente;
+		float pesoFinale;
 		unsigned long lastTimeIsDone = 0;
 		bool firstIteration = true;
 		bool firstIterationIngredient = true;
-		
+		runner.addTask(writeLcdTask);
+		writeLcdTask.enable();
 		do{
-			//Prendi distanza
-			runner.execute();
-			/*digitalWrite( triggerPort, LOW );
-			delayMicroseconds(2);
-			digitalWrite( triggerPort, HIGH );
-			delayMicroseconds( 10 );
-			digitalWrite( triggerPort, LOW );
-			durata = pulseIn( echoPort, HIGH );
-			distanza = microsecondsToCentimeters(durata);			
-			*/
-			durata = 0;
-			distanza = 0;
+			//runner.execute();
+
+			if (LoadCell.update())
+				peso = LoadCell.getData();
+
 			if (firstIteration){
-				distanzaIniziale = distanza;
+				pesoIniziale = peso;
 				firstIteration = false;
-				distanzaFinale = distanzaIniziale - quantita;
-				Serial.print("DistanzaIniziale: ");
-				Serial.println(distanzaIniziale);
+				pesoFinale = pesoIniziale + quantita;
+				Serial.print("Peso Iniziale: ");
+				Serial.println(pesoIniziale);
 			}
 
 			if(firstIterationIngredient){
 				while(proporzioni[counter][ingredient] == 0 && ingredient < nIngredients)
 					ingredient++; 
 
-				distanzaIngrediente = distanza - proporzioni[counter][ingredient] * quantita;
-				Serial.print("Distanza: ");
-				Serial.println(distanza);
+				pesoIngrediente = peso + proporzioni[counter][ingredient] * quantita;
+				Serial.print("Peso: ");
+				Serial.println(peso);
 
-				Serial.print("DistanzaIngrediente: ");
-				Serial.println(distanzaIngrediente);
+				Serial.print("Peso Ingrediente: ");
+				Serial.println(pesoIngrediente);
 				Serial.print("Ingrendiente: ");
 				Serial.println(ingredient);
 				Serial.println();
-				
+
 				firstIterationIngredient = false;
 			}
 
-			nSteps(stepPin[ingredient], dirPin[ingredient], LOW, 1);
-			/*
-			lcd.setCursor(0, 1);
-			lcd.print("dist.: ");
-
-			//dopo 38ms è fuori dalla portata del sensore
-			if( durata > 38000 ){
-				lcd.setCursor(0, 1); 
-				lcd.println("Fuori portata   ");
-			} 
-			else{ 
-				lcd.print(distanza); 
-				lcd.println(" cm     ");
-			}*/
-
-			if(distanza < distanzaIngrediente)  {
+			//nSteps(stepPin[ingredient], dirPin[ingredient], LOW, 1);
+			
+			
+			
+			//Serial.println(peso);
+			if(peso > pesoIngrediente)  {
 				if(ingredient++ < nIngredients)
 					firstIterationIngredient = true;
 				lastTimeIsDone = millis();
 			}
 			
 		} while(millis() - lastTimeIsDone < 200 || ingredient < nIngredients);
+		runner.deleteTask(writeLcdTask);
 }
 
 void selectQuantitaRoutine() {
 	if(confirm){
-		quantita = (digitalRead(DT) != currentStateCLK) ? (quantita - 1 + 15) % 15 : quantita = (quantita + 1) % 15;
+		quantita = (digitalRead(DT) != currentStateCLK) ? (quantita - 10 + 500) % 500 : quantita = (quantita + 10) % 500;
 		lcd.clear();
-		lcdPrintCentered("Quanti cm vuoi?",0);
+		lcdPrintCentered("Quanti ml vuoi?",0);
 
 		lcd.setCursor(0,1);
-		lcd.print("cm: ");
+		lcd.print("ml: ");
 		lcd.print(quantita);
 	} else {
 		state = MENU;	
@@ -274,6 +263,8 @@ void rotatoryEncoderCallback() {
 Task rotatoryEncoderTask(TASK_MILLISECOND, TASK_FOREVER, rotatoryEncoderCallback);
 
 void setup() {
+	Serial.begin(57600); 
+
 	pinMode(CLK,INPUT);
 	pinMode(DT,INPUT);
 	pinMode(SW, INPUT_PULLUP);
@@ -283,12 +274,7 @@ void setup() {
 		pinMode(dirPin[i], OUTPUT);
 	}
 
-	pinMode(triggerPort, OUTPUT);
-	pinMode(echoPort, INPUT);
-
-	Serial.begin(9600);
-
-		lcd.init();
+	lcd.init();
 	lcd.backlight();
 	lcdPrintCentered("Ciao! Posiziona ", 0);
 	lcdPrintCentered("il bicchiere!", 1);
@@ -300,9 +286,22 @@ void setup() {
 	pinMode(LED_BUILTIN, OUTPUT);
 	runner.init();
 	runner.addTask(rotatoryEncoderTask);
-	runner.addTask(blinkTask);
-	blinkTask.enable();
 	rotatoryEncoderTask.enable();
+
+	LoadCell.begin();
+	float calibrationValue; 
+	EEPROM.get(calVal_eepromAdress, calibrationValue); 
+	long stabilizingtime = 500;
+	boolean _tare = true; 
+	LoadCell.start(stabilizingtime, _tare);
+	LoadCell.setCalFactor(calibrationValue);
+	if (LoadCell.getTareTimeoutFlag()) {
+		Serial.println("Timeout, check MCU>HX711 wiring and pin designations");
+	}
+	else {
+		LoadCell.setCalFactor(calibrationValue); // set calibration factor (float)
+		Serial.println("Startup is complete");
+	}
 }
 
 void loop() {
