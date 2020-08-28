@@ -26,7 +26,7 @@ bool buttonPressed = false;
 unsigned long lastButtonPress = 0;
 
 //Stepper motor's pin
-const int dirPin[4] = {7, 9, 11, 13}; 
+const int dirPin[4] = {7, 9, 11, 13};
 const int stepPin[4] = {8, 10, 12, 14};
 
 //States variables
@@ -35,7 +35,7 @@ bool confirm = true;
 int state = MENU;
 
 //Other variables
-int ml = 20;
+int ml = 150;
 const int nDrinks = 3;
 const int nIngredients = 4;
 String drinks[nDrinks] = {"Cuba libre", "Rum e arancia", "Rum tonic"};
@@ -157,7 +157,7 @@ void serveRoutine() {
 		float initialWeight;
 		float ingredientWeight;
 		float finalWeight;
-		unsigned long lastTimeIsDone = 0;
+		unsigned long lastTimeWeightWasLower = 0;
 		bool firstIteration = true;
 		bool firstIterationIngredient = true;
 		int percentual = 0;
@@ -200,20 +200,21 @@ void serveRoutine() {
 
 			runMotor(stepPin[ingredient], dirPin[ingredient], LOW);
 			
-			if(weight > ingredientWeight)  {
-				if(ingredient++ < nIngredients)
+			if(weight > ingredientWeight )  {
+				if(millis() - lastTimeWeightWasLower > 500 && ingredient++ < nIngredients)
 					firstIterationIngredient = true;
-				lastTimeIsDone = millis();
+			} else {
+				lastTimeWeightWasLower = millis();
 			}
-			
-		} while(millis() - lastTimeIsDone < 200 || ingredient < nIngredients && ingredient >= 0);
+		} while(ingredient < nIngredients && ingredient >= 0);
 		motorTask.disable();
 		runner.deleteTask(motorTask);
 		state = MENU;	
 		hasChangedState = true;
+		buttonPressed = false; 
 }
 
-//Load cell stabilizator 
+//Load cell stabilizator: waits until std deviation of the last 10 observations is > 0.5. 
 void waitUntilWeightIsStable() {
 	lcd.clear();
 	lcdPrintCentered("Stabilizing", 0);
@@ -301,4 +302,3 @@ void loop() {
 	runner.execute();
 	checkButtonPressed();
 }
-
