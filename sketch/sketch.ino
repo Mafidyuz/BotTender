@@ -77,9 +77,6 @@ void motorCallback() {
 void runMotor(int stepPin, int dirPin, bool dir) {
 	currentStepPin = stepPin;
 	if(!motorTask.isEnabled()){
-		Serial.println("is enabled");
-		Serial.print("Step pin: ");
-		Serial.println(stepPin);
 		runner.deleteTask(motorTask);
 		digitalWrite(dirPin, dir);
 		runner.addTask(motorTask);
@@ -122,8 +119,6 @@ void confirmRoutine() {
 	lcd.clear();
 	lcdPrintCentered(drinks[counter] + "?", 0);
 	lcd.setCursor(0, 1);
-
-	Serial.println(confirm);
 	if (confirm) 
 		lcd.print(" [YES]      NO  ");
 	else 
@@ -170,8 +165,6 @@ void serveRoutine() {
 			if (firstIteration){
 				initialWeight = weight;
 				firstIteration = false;
-				Serial.print("Initial weight: ");
-				Serial.println(initialWeight);
 				finalWeight = initialWeight + ml;
 			}
 
@@ -180,14 +173,6 @@ void serveRoutine() {
 					ingredient++; 
 
 				ingredientWeight = weight + proportions[counter][ingredient] * ml;
-				Serial.print("weight: ");
-				Serial.println(weight);
-
-				Serial.print("Ingredient's weight: ");
-				Serial.println(ingredientWeight);
-				Serial.print("Ingredient: ");
-				Serial.println(ingredient);
-				Serial.println();
 
 				firstIterationIngredient = false;
 			}
@@ -227,12 +212,8 @@ void waitUntilWeightIsStable() {
 			if(LoadCell.update()) w = LoadCell.getData();
 			else i--;
 			stats.addData(w);
-			Serial.print("w: ");
-			Serial.println(w);
 			delay(100);
 		}
-	Serial.print("std: ");
-	Serial.println(stats.stdDeviation());
 	} while(stats.stdDeviation() > 0.5);
 }
 
@@ -254,7 +235,6 @@ void rotatoryEncoderCallback() {
 				serveRoutine();
 				break;
 			default:
-				Serial.println("SHOULD NEVER GET HERE");
 				break;
 		}
 	}
@@ -262,8 +242,6 @@ void rotatoryEncoderCallback() {
 }
 
 void setup() {
-	Serial.begin(57600); 
-
 	//Rotatory encoder
 	pinMode(CLK,INPUT);
 	pinMode(DT,INPUT);
